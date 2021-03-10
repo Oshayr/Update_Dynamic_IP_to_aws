@@ -49,7 +49,8 @@ assert ip, ValueError('No Current IP found')
 # Get aws security group object
 security_group = resource("ec2", region_name=AWS_REGION).SecurityGroup(SECURITY_GROUP_ID)
 # Get from the aws security group, the ip and remove if needed
-if old_ip := get_old_ip(security_group, ip):
+old_ip = get_old_ip(security_group, ip)
+if old_ip:
     security_group.revoke_ingress(IpProtocol=PROTOCOL, FromPort=PORT, CidrIp=old_ip)
 # Add current ip
 ip_dir = {"FromPort": PORT, "IpProtocol": PROTOCOL, "IpRanges": [{"CidrIp": ip, "Description": DESCRIPTION}]}
