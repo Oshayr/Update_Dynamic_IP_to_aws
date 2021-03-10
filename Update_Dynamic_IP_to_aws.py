@@ -1,85 +1,56 @@
-import boto3
-# requires boto3 to be setup
+#!/usr/bin/python3
 
-import requests
+from boto3 import resource
+# requires boto3 to be configured
+from requests import get
 
-AWS_REGION = "us-east-1"  # region security group is in
-security_group_id = "sg-XXXXXXXXXXXXXXXXX"  # id of security group
-DISC = "dynamic ip"  # description comment of the ip to be added or updated
-PORT = 22  # port to use - meaningless if protocol all, but still needed
-PROTOCOL = "All"  # protocol tcp/udp/all
-REMOVE_CURRENT_MANUALLY_ADDED_IP = False  # if true will remove current ip even without the description
+# region security group is in
+AWS_REGION = "us-east-1"
+# id of security group
+SECURITY_GROUP_ID = "sg-12345a6bc7de89f10"
+# description comment of the ip to be added or updated
+DESCRIPTION = "dynamic ip"
+# port to use - meaningless if protocol all, but still required
+PORT = 22
+# protocol tcp/udp/All ( -1 for All )
+PROTOCOL = "-1"
+# if true will remove current ip using the set Protocol, and port (if not all), even without the set description
+REMOVE_CURRENT_MANUALLY_ADDED_IP = False
 
 
-def get_ip():
+def get_old_ip(sg, oip, protocol, port, disc, remove_ip):
     """
-    Get from web Current IP
-    :return: IP <str>
+    Loop over aws security group ips for current ip or set description
+    :param sg: aws security group obj
+    :param oip: current ip
+    :param protocol: user set protocol
+    :param port: user set port
+    :param disc: user set description
+    :param remove_ip: Boolean if to remove the manually added current ip from the security group (needs to be removed
+    in order to add current ip with set description)
+    :return: ip from security group that has the set description, or is the current ip if remove_ip is True
     """
-    resp = requests.get("http://checkip.amazonaws.com/")
-    resp.raise_for_status()
-    return resp.content.strip().decode("utf-8") + "/32"
-
-
-def need_to_update(sg, ip):
-    last_ip = None
     for s in sg.ip_permissions:
         for r in s.get("IpRanges"):
-            if "dynamic ip" in r.get("Description", ""):
-                last_ip = r.get("CidrIp")
-            if ip == r.get("CidrIp"):
-                if s["IpProtocol"] != "-1":
-                    print(
-                        f"{', '.join([f'{k}: {v}' for k, v in r.items()])} - Manually entered - "
-                        f"Found with {s.get('IpProtocol')} Port: {s.get('FromPort')}"
-                    )
-
-                elif last_ip == ip:
-                    print(
-                        f"{', '.join([f'{k}: {v}' for k, v in r.items()])}- Manually entered - found with All Traffic"
-                    )
-                    if REMOVE_CURRENT_MANUALLY_ADDED_IP:
-                        return True, ip
-                    return False, None
-
-    return True, last_ip
+            if disc in r.get("Description", ""):
+                return r.get("CidrIp")
+            if oip == r.get("CidrIp") and s.get('IpProtocol') == protocol and \
+                    (protocol == '-1' or s.get('FromPort') == port):
+                assert not remove_ip, ValueError(f' {oip} already exists in the security group')
+                return r.get("CidrIp")
+    return None
 
 
-def add_ip(sg, ip):
-    try:
-        f = sg.authorize_ingress(
-            IpPermissions=[
-                {
-                    "FromPort": PORT,
-                    "IpProtocol": PROTOCOL,
-                    "IpRanges": [{"CidrIp": ip, "Description": DISC}],
-                }
-            ]
-        )
-    except BaseException as e:
-        print(e)
-        f = False
-    return f
-
-
-def del_ip(sg, ip):
-    try:
-        f = sg.revoke_ingress(IpProtocol=PROTOCOL, FromPort=PORT, CidrIp=ip)
-    except BaseException as e:
-        print(e)
-        f = False
-    return f
-
-
-current_ip = get_ip()
-if not current_ip:
-    print("No Current IP Found")
-else:
-    ec2 = boto3.resource("ec2", region_name=AWS_REGION)
-    security_group = ec2.SecurityGroup(security_group_id)
-    update, old_ip = need_to_update(security_group, current_ip)
-    if update:
-        if old_ip and del_ip(security_group, old_ip):
-            print(f"Removed {old_ip}")
-        if add_ip(security_group, current_ip):
-            print(f"Updated {current_ip}")
+# Get current ip
+resp = get("http://checkip.amazonaws.com/")
+resp.raise_for_status()
+ip = resp.content.strip().decode("utf-8") + "/32"
+assert ip, ValueError('No Current IP found')
+# Get aws security group object
+security_group = resource("ec2", region_name=AWS_REGION).SecurityGroup(SECURITY_GROUP_ID)
+# Get from the aws security group, the ip and remove if needed
+if old_ip := get_old_ip(security_group, ip, PROTOCOL, PORT, DESCRIPTION, REMOVE_CURRENT_MANUALLY_ADDED_IP):
+    security_group.revoke_ingress(IpProtocol=PROTOCOL, FromPort=PORT, CidrIp=old_ip)
+# Add current ip
+security_group.authorize_ingress(IpPermissions=[{"FromPort": PORT, "IpProtocol": PROTOCOL,
+                                                 "IpRanges": [{"CidrIp": ip, "Description": DESCRIPTION}]}])
