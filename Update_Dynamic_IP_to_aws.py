@@ -1,4 +1,7 @@
 #!/usr/bin/python3
+"""
+Update your aws security group with your current ip
+"""
 
 from boto3 import resource
 # requires boto3 to be configured
@@ -14,30 +17,27 @@ DESCRIPTION = "dynamic ip"
 PORT = 22
 # protocol tcp/udp/All ( -1 for All )
 PROTOCOL = "-1"
-# if true will remove current ip using the set Protocol, and port (if not all), even without the set description
+# if true will remove current ip using the set Protocol,
+# and port (if not all), even without the set description
 REMOVE_CURRENT_MANUALLY_ADDED_IP = False
 
 
-def get_old_ip(sg, oip, protocol, port, disc, remove_ip):
+def get_old_ip(security_group_obj, current_ip):
     """
     Loop over aws security group ips for current ip or set description
-    :param sg: aws security group obj
-    :param oip: current ip
-    :param protocol: user set protocol
-    :param port: user set port
-    :param disc: user set description
-    :param remove_ip: Boolean if to remove the manually added current ip from the security group (needs to be removed
-    in order to add current ip with set description)
+    :param security_group_obj: aws security group obj
+    :param current_ip: current ip
     :return: ip from security group that has the set description, or is the current ip if remove_ip is True
     """
-    for s in sg.ip_permissions:
-        for r in s.get("IpRanges"):
-            if disc in r.get("Description", ""):
-                return r.get("CidrIp")
-            if oip == r.get("CidrIp") and s.get('IpProtocol') == protocol and \
-                    (protocol == '-1' or s.get('FromPort') == port):
-                assert not remove_ip, ValueError(f' {oip} already exists in the security group')
-                return r.get("CidrIp")
+    for permission in security_group_obj.ip_permissions:
+        for ip_range in permission.get("IpRanges"):
+            if DESCRIPTION in ip_range.get("Description", ""):
+                return ip_range.get("CidrIp")
+            if current_ip == ip_range.get("CidrIp") and permission.get('IpProtocol') == PROTOCOL and \
+                    (PROTOCOL == '-1' or permission.get('FromPort') == PORT):
+                assert not REMOVE_CURRENT_MANUALLY_ADDED_IP, \
+                    ValueError(f' {current_ip} already exists in the security group')
+                return ip_range.get("CidrIp")
     return None
 
 
@@ -49,8 +49,8 @@ assert ip, ValueError('No Current IP found')
 # Get aws security group object
 security_group = resource("ec2", region_name=AWS_REGION).SecurityGroup(SECURITY_GROUP_ID)
 # Get from the aws security group, the ip and remove if needed
-if old_ip := get_old_ip(security_group, ip, PROTOCOL, PORT, DESCRIPTION, REMOVE_CURRENT_MANUALLY_ADDED_IP):
+if old_ip := get_old_ip(security_group, ip):
     security_group.revoke_ingress(IpProtocol=PROTOCOL, FromPort=PORT, CidrIp=old_ip)
 # Add current ip
-security_group.authorize_ingress(IpPermissions=[{"FromPort": PORT, "IpProtocol": PROTOCOL,
-                                                 "IpRanges": [{"CidrIp": ip, "Description": DESCRIPTION}]}])
+ip_dir = {"FromPort": PORT, "IpProtocol": PROTOCOL, "IpRanges": [{"CidrIp": ip, "Description": DESCRIPTION}]}
+security_group.authorize_ingress(IpPermissions=[ip_dir])
