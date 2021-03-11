@@ -1,0 +1,9 @@
+name: Integration pipreqs Test
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: run pipreqs
+        uses: ryan-rozario/pipreqs-action-cpy@master
