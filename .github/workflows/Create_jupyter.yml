@@ -1,4 +1,4 @@
-name: autopy-lot
+name: Create jupyter notebooks
 on: [push]
 
 jobs:
@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - name: autopy-lot 
+      - name: Create jupyter notebooks
         uses: deep5050/autopy-lot@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN}}
