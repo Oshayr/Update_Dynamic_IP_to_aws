@@ -1,9 +1,9 @@
-name: Integration pipreqs Test
+name: Build pip requirments
 on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
-      - name: run pipreqs
+      - name: run build pip requirments
         uses: ryan-rozario/pipreqs-action-cpy@master
