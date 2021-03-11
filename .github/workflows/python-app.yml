@@ -19,17 +19,12 @@ jobs:
       with:
         python-version: 3.9
     - name: restore pip download cache
-      uses: syphar/restore-pip-download-cache@v1
-    - name: autopy-lot 
-      uses: deep5050/autopy-lot@master
+      uses: actions/cache@v2
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN}}
-        check: all # latest
-        input_type: py
-        comment_magics: true
-        split_at_heading: true
-        output_type: ipynb
-        output_dir: './jupyter/'
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
     - name: Automatic requirements.txt for Python Projects
       uses: ryan-rozario/pipreqs-action@v2.0.0
     - name: Install dependencies
